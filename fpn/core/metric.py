@@ -13,7 +13,7 @@ import numpy as np
 def get_rpn_names():
     pred = ['rpn_cls_prob','rpn_bbox_loss']
 
-    label = ['rpn_label/p3','rpn_label/p4','rpn_label/p5','rpn_label/p6','rpn_bbox_target/p3', 'rpn_bbox_target/p4', 'rpn_bbox_target/p5','rpn_bbox_target/p6','rpn_bbox_weight/p3','rpn_bbox_weight/p4','rpn_bbox_weight/p5','rpn_bbox_weight/p6']
+    label = ['rpn_label/p2','rpn_label/p3','rpn_label/p4','rpn_label/p5','rpn_label/p6','rpn_bbox_target/p2','rpn_bbox_target/p3', 'rpn_bbox_target/p4', 'rpn_bbox_target/p5','rpn_bbox_target/p6','rpn_bbox_weight/p2','rpn_bbox_weight/p3','rpn_bbox_weight/p4','rpn_bbox_weight/p5','rpn_bbox_weight/p6']
     return pred, label
 
 
@@ -35,13 +35,13 @@ class RPNAccMetric(mx.metric.EvalMetric):
     def update(self, labels, preds):
 
         pred = preds[self.pred.index('rpn_cls_prob')]
-  
+        label1 = labels[self.label.index('rpn_label/p2')].asnumpy().astype('int32')[0] 
         label2 = labels[self.label.index('rpn_label/p3')].asnumpy().astype('int32')[0]
         label3 = labels[self.label.index('rpn_label/p4')].asnumpy().astype('int32')[0]
         label4 = labels[self.label.index('rpn_label/p5')].asnumpy().astype('int32')[0]
         label5 = labels[self.label.index('rpn_label/p6')].asnumpy().astype('int32')[0]
 
-        label = np.hstack((label2,label3,label4,label5))
+        label = np.hstack((label1,label2,label3,label4,label5))
 
 
       #  label = labels[self.label.index('rpn_label/p3')]
@@ -71,12 +71,13 @@ class RPNLogLossMetric(mx.metric.EvalMetric):
 
     def update(self, labels, preds):
         pred = preds[self.pred.index('rpn_cls_prob')]
+        label1 = labels[self.label.index('rpn_label/p2')].asnumpy().astype('int32')[0]
         label2 = labels[self.label.index('rpn_label/p3')].asnumpy().astype('int32')[0]
         label3 = labels[self.label.index('rpn_label/p4')].asnumpy().astype('int32')[0]
         label4 = labels[self.label.index('rpn_label/p5')].asnumpy().astype('int32')[0]
         label5 = labels[self.label.index('rpn_label/p6')].asnumpy().astype('int32')[0]
 
-        label = np.hstack((label2,label3,label4,label5))
+        label = np.hstack((label1,label2,label3,label4,label5))
         # label (b, p)
       #  label = label.asnumpy().astype('int32').reshape((-1))
         # pred (b, c, p) or (b, c, h, w) --> (b, p, c) --> (b*p, c)
@@ -105,12 +106,13 @@ class  RPNL1LossMetric(mx.metric.EvalMetric):
         bbox_loss = preds[self.pred.index('rpn_bbox_loss')].asnumpy()
 
         # calculate num_inst (average on those kept anchors)
+        label1 = labels[self.label.index('rpn_label/p2')].asnumpy().astype('int32')[0]
         label2 = labels[self.label.index('rpn_label/p3')].asnumpy().astype('int32')[0]
         label3 = labels[self.label.index('rpn_label/p4')].asnumpy().astype('int32')[0]
         label4 = labels[self.label.index('rpn_label/p5')].asnumpy().astype('int32')[0]
         label5 = labels[self.label.index('rpn_label/p6')].asnumpy().astype('int32')[0]
 
-        label = np.hstack((label2,label3,label4,label5))
+        label = np.hstack((label1,label2,label3,label4,label5))
         num_inst = np.sum(label != -1)
 
         self.sum_metric += np.sum(bbox_loss)
@@ -143,8 +145,8 @@ class RCNNAccMetric(mx.metric.EvalMetric):
         pred_label = pred_label[keep_inds]
         label = label[keep_inds]
         print "--------------"
-        print label[label>0]
-        print pred_label[label>0]
+        print label[label!=0]
+        print pred_label[label!=0]
         print '--------------'
         self.sum_metric += np.sum(pred_label.flat == label.flat)
         self.num_inst += len(pred_label.flat)

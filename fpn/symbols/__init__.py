@@ -1,2 +1,2 @@
-
+import resnet_v1_50
 import resnet_v1_101_rcnn_dcn

@@ -117,9 +117,9 @@ def get_rcnn_batch(roidb, cfg):
     return data, label
 
 
-def sample_rois(rois, fg_rois_per_image, rois_per_image, num_classes, cfg,
-                labels=None, overlaps=None, bbox_targets=None, gt_boxes=None):
 
+def sample_rois(rois, fg_rois_per_image, rois_per_image, num_classes,cfg,
+                labels=None, overlaps=None, bbox_targets=None, gt_boxes=None, sample_type=None, k0 = 4):
     """
     generate random sample of ROIs comprising foreground and background examples
     :param rois: all_rois [n, 4]; e2e: [n, 5] with batch_index
@@ -132,55 +132,91 @@ def sample_rois(rois, fg_rois_per_image, rois_per_image, num_classes, cfg,
     :param gt_boxes: optional for e2e [n, 5] (x1, y1, x2, y2, cls)
     :return: (labels, rois, bbox_targets, bbox_weights)
     """
-    if labels is None:
-        overlaps = bbox_overlaps(rois[:, 1:].astype(np.float), gt_boxes[:, :4].astype(np.float))
-        gt_assignment = overlaps.argmax(axis=1)
-        overlaps = overlaps.max(axis=1)
-        labels = gt_boxes[gt_assignment, 4]
-
-    # foreground RoI with FG_THRESH overlap
-    fg_indexes = np.where(overlaps >= cfg.TRAIN.FG_THRESH)[0]
-    # guard against the case when an image has fewer than fg_rois_per_image foreground RoIs
-    fg_rois_per_this_image = np.minimum(fg_rois_per_image, fg_indexes.size)
-    # Sample foreground regions without replacement
-    if len(fg_indexes) > fg_rois_per_this_image:
-        fg_indexes = npr.choice(fg_indexes, size=fg_rois_per_this_image, replace=False)
-
-    # Select background RoIs as those within [BG_THRESH_LO, BG_THRESH_HI)
-    bg_indexes = np.where((overlaps < cfg.TRAIN.BG_THRESH_HI) & (overlaps >= cfg.TRAIN.BG_THRESH_LO))[0]
-    # Compute number of background RoIs to take from this image (guarding against there being fewer than desired)
-    bg_rois_per_this_image = rois_per_image - fg_rois_per_this_image
-    bg_rois_per_this_image = np.minimum(bg_rois_per_this_image, bg_indexes.size)
-    # Sample foreground regions without replacement
-    if len(bg_indexes) > bg_rois_per_this_image:
-        bg_indexes = npr.choice(bg_indexes, size=bg_rois_per_this_image, replace=False)
-
-    # indexes selected
-    keep_indexes = np.append(fg_indexes, bg_indexes)
-
-    # pad more to ensure a fixed minibatch size
-    while keep_indexes.shape[0] < rois_per_image:
-        gap = np.minimum(len(rois), rois_per_image - keep_indexes.shape[0])
-        gap_indexes = npr.choice(range(len(rois)), size=gap, replace=False)
-        keep_indexes = np.append(keep_indexes, gap_indexes)
-
-    # select labels
-    labels = labels[keep_indexes]
-    # set labels of bg_rois to be 0
-    labels[fg_rois_per_this_image:] = 0
-    rois = rois[keep_indexes]
-
-    # load or compute bbox_target
-    if bbox_targets is not None:
+    if gt_boxes[0, 4] == -1:
+        # for empty image, only sample negtive samples
+        roi_num = rois.shape[0]
+#         print 'roi_num: %d' % roi_num
+        if roi_num > rois_per_image:
+            keep_indexes = npr.choice(range(roi_num), size=rois_per_image, replace=False)
+        else:
+            keep_indexes = npr.choice(range(roi_num), size=rois_per_image, replace=True)
+        
+        labels = np.zeros((roi_num), dtype=np.int32)
+        labels = labels[keep_indexes]
+        rois = rois[keep_indexes]
+        bbox_targets = np.zeros((roi_num, 4 * num_classes), dtype=np.float32)
         bbox_target_data = bbox_targets[keep_indexes, :]
     else:
-        targets = bbox_transform(rois[:, 1:], gt_boxes[gt_assignment[keep_indexes], :4])
-        if cfg.TRAIN.BBOX_NORMALIZATION_PRECOMPUTED:
-            targets = ((targets - np.array(cfg.TRAIN.BBOX_MEANS))
-                       / np.array(cfg.TRAIN.BBOX_STDS))
-        bbox_target_data = np.hstack((labels[:, np.newaxis], targets))
+        if labels is None:
+
+            overlaps = bbox_overlaps(rois[:, 1:].astype(np.float), gt_boxes[:, :4].astype(np.float))
+            gt_assignment = overlaps.argmax(axis=1)
+            overlaps = overlaps.max(axis=1)
+            labels = gt_boxes[gt_assignment, 4]
+
+        # foreground RoI with FG_THRESH overlap
+        fg_indexes = np.where(overlaps >= cfg.TRAIN.FG_THRESH)[0]
+        # guard against the case when an image has fewer than fg_rois_per_image foreground RoIs
+        fg_rois_per_this_image = np.minimum(fg_rois_per_image, fg_indexes.size)
+        # Sample foreground regions without replacement
+        if len(fg_indexes) > fg_rois_per_this_image:
+            fg_indexes = npr.choice(fg_indexes, size=fg_rois_per_this_image, replace=False)
+
+        # Select background RoIs as those within [BG_THRESH_LO, BG_THRESH_HI)
+        bg_indexes = np.where((overlaps < cfg.TRAIN.BG_THRESH_HI) & (overlaps >= cfg.TRAIN.BG_THRESH_LO))[0]
+        # Compute number of background RoIs to take from this image (guarding against there being fewer than desired)
+        bg_rois_per_this_image = rois_per_image - fg_rois_per_this_image
+        bg_rois_per_this_image = np.minimum(bg_rois_per_this_image, bg_indexes.size)
+        # Sample foreground regions without replacement
+        if len(bg_indexes) > bg_rois_per_this_image:
+            bg_indexes = npr.choice(bg_indexes, size=bg_rois_per_this_image, replace=False)
+
+        # indexes selected
+        keep_indexes = np.append(fg_indexes, bg_indexes)
+
+        # pad more to ensure a fixed minibatch size
+        while keep_indexes.shape[0] < rois_per_image:
+            gap = np.minimum(len(rois), rois_per_image - keep_indexes.shape[0])
+            gap_indexes = npr.choice(range(len(rois)), size=gap, replace=False)
+            keep_indexes = np.append(keep_indexes, gap_indexes)
+
+        # select labels
+        labels = labels[keep_indexes]
+        # set labels of bg_rois to be 0
+        labels[fg_rois_per_this_image:] = 0
+        rois = rois[keep_indexes]
+    # ind = np.where(labels!=0)
+
+        # load or compute bbox_target
+        if bbox_targets is not None:
+            bbox_target_data = bbox_targets[keep_indexes, :]
+        else:
+
+            targets = bbox_transform(rois[:, 1:], gt_boxes[gt_assignment[keep_indexes], :4])
+        
+            if cfg.TRAIN.BBOX_NORMALIZATION_PRECOMPUTED:
+                targets = ((targets - np.array(cfg.TRAIN.BBOX_MEANS))
+                        / np.array(cfg.TRAIN.BBOX_STDS))
+            
+            bbox_target_data = np.hstack((labels[:, np.newaxis], targets))
+    
+ #   print bbox_target_data[ind,:]
 
     bbox_targets, bbox_weights = \
         expand_bbox_regression_targets(bbox_target_data, num_classes, cfg)
+    if sample_type == 'fpn':
+        #print 0
+        w = (rois[:,3]-rois[:,1])
+        h = (rois[:,4]-rois[:,2])
+        s = w * h
+        s[s<=0]=1e-6
+        layer_index = np.floor(k0+np.log2(np.sqrt(s)/224))
 
-    return rois, labels, bbox_targets, bbox_weights
+        layer_index[layer_index<2]=2
+        layer_index[layer_index>5]=5
+        #print 1
+        return rois, labels, bbox_targets, bbox_weights, layer_index #rois:[512,5]   labels:[512,]
+    else:
+        return rois, labels, bbox_targets, bbox_weights
+
+

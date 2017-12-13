@@ -74,6 +74,7 @@ class ProposalOperator(mx.operator.CustomOp):
         # 1. Generate proposals from bbox_deltas and shifted anchors
         # use real image size instead of padded feature map sizes
        # height, width = int(im_info[0] / self._feat_stride), int(im_info[1] / self._feat_stride)
+ 
         height = in_data[3].shape[2]
         width =in_data[3].shape[3]
  

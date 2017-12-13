@@ -7,9 +7,9 @@ def load_gt_roidb(dataset_name, image_set_name, root_path, dataset_path, result_
     """ load ground truth roidb """
     imdb = eval(dataset_name)(image_set_name, root_path, dataset_path, result_path)
     roidb = imdb.gt_roidb()
-  #  print roidb[0:2]
+
     if flip:
-       # print "flip....................................."
+
         roidb = imdb.append_flipped_images(roidb)
     return roidb
 

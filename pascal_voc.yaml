@@ -1,29 +1,26 @@
 ---
 MXNET_VERSION: "mxnet"
 output_path: "./output/voc"
-symbol: resnet_v1_101_rcnn_dcn
+symbol: resnet_v1_50
 gpus: '0'
 CLASS_AGNOSTIC: false
 SCALES:
-- 600
-- 1000
+- 832
+- 1408
 default:
   frequent: 100
   kvstore: device
 network:
-  pretrained: "./model/pretrained_model/resnet_v1_101"
+  pretrained: "./model/pretrained_model/resnet-50"
   pretrained_epoch: 0
   PIXEL_MEANS:
-  - 103.06
-  - 115.90
-  - 123.15
-  IMAGE_STRIDE: 0
+  - 103.939
+  - 116.779
+  - 123.68
+  IMAGE_STRIDE: 64
 
   FIXED_PARAMS:
-  - conv1
-  - bn_conv1
-  - res2
-  - bn2
+  - conv0
   - gamma
   - beta
   FIXED_PARAMS_SHARED:
@@ -38,8 +35,21 @@ network:
   - gamma
   - beta
 
-  p3_RCNN_FEAT_STRIDE: 4
-  p3_RPN_FEAT_STRIDE: 4
+  p2_RCNN_FEAT_STRIDE: 4
+  p2_RPN_FEAT_STRIDE: 4
+
+  p2_ANCHOR_RATIOS:
+  - 0.5
+  - 1
+  - 2
+  p2_ANCHOR_SCALES:
+  - 8
+  - 10
+  p2_NUM_ANCHORS: 6
+  
+
+  p3_RCNN_FEAT_STRIDE: 8
+  p3_RPN_FEAT_STRIDE: 8
 
   p3_ANCHOR_RATIOS:
   - 0.5
@@ -48,13 +58,11 @@ network:
   p3_ANCHOR_SCALES:
   - 8
   - 10
-  - 12
+  p3_NUM_ANCHORS: 6
 
-  p3_NUM_ANCHORS: 9
-  
 
-  p4_RCNN_FEAT_STRIDE: 8
-  p4_RPN_FEAT_STRIDE: 8
+  p4_RCNN_FEAT_STRIDE: 16
+  p4_RPN_FEAT_STRIDE: 16
 
   p4_ANCHOR_RATIOS:
   - 0.5
@@ -63,12 +71,10 @@ network:
   p4_ANCHOR_SCALES:
   - 8
   - 10
-  - 12
-  p4_NUM_ANCHORS: 9 
+  p4_NUM_ANCHORS: 6
 
-
-  p5_RCNN_FEAT_STRIDE: 16
-  p5_RPN_FEAT_STRIDE: 16
+  p5_RCNN_FEAT_STRIDE: 32
+  p5_RPN_FEAT_STRIDE: 32
 
   p5_ANCHOR_RATIOS:
   - 0.5
@@ -77,11 +83,10 @@ network:
   p5_ANCHOR_SCALES:
   - 8
   - 10
-  - 12
-  p5_NUM_ANCHORS: 9
-
-  p6_RCNN_FEAT_STRIDE: 32
-  p6_RPN_FEAT_STRIDE: 32
+  p5_NUM_ANCHORS: 6
+  
+  p6_RCNN_FEAT_STRIDE: 64
+  p6_RPN_FEAT_STRIDE: 64
 
   p6_ANCHOR_RATIOS:
   - 0.5
@@ -90,8 +95,7 @@ network:
   p6_ANCHOR_SCALES:
   - 8
   - 10
-  - 12
-  p6_NUM_ANCHORS: 9
+  p6_NUM_ANCHORS: 6
 
 
 dataset:
@@ -100,13 +104,13 @@ dataset:
   dataset_path: "./data/voc/VOCdevkit2007"
   image_set: 2007_trainval
   root_path: "./data"
-  test_image_set: test
+  test_image_set: 2007_trainval
   proposal: rpn
 TRAIN:
   lr: 0.0001
-  lr_step: '100.333'
+  lr_step: '7'
   warmup: false
-  warmup_lr: 0.02
+  warmup_lr: 0.00002
   # typically we will use 8000 warmup step for single GPU for COCO
   warmup_step: 1000
   begin_epoch: 0
@@ -115,7 +119,7 @@ TRAIN:
   # whether resume training
   RESUME: false
   # whether flip image
-  FLIP: false
+  FLIP: true
   # whether shuffle image
   SHUFFLE: false
   # whether use OHEM
@@ -128,8 +132,8 @@ TRAIN:
   ASPECT_GROUPING: true
   # R-CNN
   # rcnn rois batch size
-  BATCH_ROIS: 256
-  BATCH_ROIS_OHEM: 256
+  BATCH_ROIS: 128
+  BATCH_ROIS_OHEM: 128
   # rcnn rois sampling params
   FG_FRACTION: 0.25
   FG_THRESH: 0.5
@@ -162,8 +166,8 @@ TRAIN:
   # RPN proposal
   CXX_PROPOSAL: false
   RPN_NMS_THRESH: 0.7
-  RPN_PRE_NMS_TOP_N: 6000
-  RPN_POST_NMS_TOP_N: 4000
+  RPN_PRE_NMS_TOP_N: 12000
+  RPN_POST_NMS_TOP_N: 2000
   RPN_MIN_SIZE: 0
   # approximate bounding box regression
   BBOX_NORMALIZATION_PRECOMPUTED: true
@@ -186,7 +190,7 @@ TEST:
   CXX_PROPOSAL: false
   RPN_NMS_THRESH: 0.7
   RPN_PRE_NMS_TOP_N: 6000
-  RPN_POST_NMS_TOP_N: 4000
+  RPN_POST_NMS_TOP_N: 1000
   RPN_MIN_SIZE: 0
   # RPN generate proposal
   PROPOSAL_NMS_THRESH: 0.7
@@ -195,6 +199,6 @@ TEST:
   PROPOSAL_MIN_SIZE: 0
   # RCNN nms
   NMS: 0.3
-  test_epoch: 16
-  max_per_image: 100
+  test_epoch: 25
+  max_per_image: -1
 

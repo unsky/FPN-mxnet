@@ -17,6 +17,7 @@ from utils import image
 from bbox.bbox_transform import bbox_pred, clip_boxes
 from nms.nms import py_nms_wrapper, cpu_nms_wrapper, gpu_nms_wrapper
 from utils.PrefetchingIter import PrefetchingIter
+from bbox.bbox_regression import expand_bbox_regression_targets
 
 
 class Predictor(object):
@@ -44,8 +45,9 @@ def im_proposal(predictor, data_batch, data_names, scales):
 
     for output, data_dict, scale in zip(output_all, data_dict_all, scales):
         # drop the batch index
-        boxes = output['rois_output'].asnumpy()[:, 1:]
-        scores = output['rois_score'].asnumpy()
+
+        boxes = output['rois_concat_output'].asnumpy()[:, 1:]
+        scores = output['score_concat_output'].asnumpy()
 
         # transform to original scale
         boxes = boxes / scale
@@ -75,6 +77,7 @@ def generate_proposals(predictor, test_data, imdb, cfg, vis=False, thresh=0.):
     t = time.time()
     imdb_boxes = list()
     original_boxes = list()
+
     for im_info, data_batch in test_data:
         t1 = time.time() - t
         t = time.time()
@@ -92,9 +95,9 @@ def generate_proposals(predictor, test_data, imdb, cfg, vis=False, thresh=0.):
             keep = np.where(dets[:, 4:] > thresh)[0]
             dets = dets[keep, :]
             imdb_boxes.append(dets)
-
+            vis = False
             if vis:
-                vis_all_detection(data_dict['data'].asnumpy(), [dets], ['obj'], scale, cfg)
+                vis_all_detection(idx,data_dict['data'].asnumpy(), [dets], ['obj'], scale, cfg)
 
             print 'generating %d/%d' % (idx + 1, imdb.num_images), 'proposal %d' % (dets.shape[0]), \
                 'data %.4fs net %.4fs' % (t1, t2 / test_data.batch_size)
@@ -118,42 +121,122 @@ def generate_proposals(predictor, test_data, imdb, cfg, vis=False, thresh=0.):
             cPickle.dump(original_boxes, f, cPickle.HIGHEST_PROTOCOL)
 
     print 'wrote rpn proposals to {}'.format(rpn_file)
-
     return imdb_boxes
 
+def vis_rois_detection(im_array, detections, class_names, s,scale):
+    """
+    visualize all detections in one image
+    :param im_array: [b=1 c h w] in rgb
+    :param detections: [ numpy.ndarray([[x1 y1 x2 y2 score]]) for j in classes ]
+    :param class_names: list of names in imdb
+    :param scale: visualize the scaled image
+    :return:
+    """
+    import matplotlib  
+    matplotlib.use('Agg') 
+    import matplotlib.pyplot as plt
+    from matplotlib.pyplot import savefig  
+    import random
+    a =  [103.06 ,115.9 ,123.15]
+    a = np.array(a)
+    im = image.transform_inverse(im_array,a)
+    plt.imshow(im)
+  #  print class_names.shape
+    for j in range(class_names.shape[0]):
+        if class_names[j] == 0:
+            continue
+        color = (random.random(), random.random(), random.random())  # generate a random color
+        dets = detections[j]
+     
+        det =dets
 
+        bbox = det[0:] 
+        score = s[j]
+        if score >0.5:
+            rect = plt.Rectangle((bbox[0], bbox[1]),
+                                 bbox[2] - bbox[0],
+                                 bbox[3] - bbox[1], fill=False,
+                                 edgecolor=color, linewidth=3.5)
+            plt.gca().add_patch(rect)
+            plt.gca().text(bbox[0], bbox[1] - 2,
+                           '{:s} {:.3f}'.format(str(class_names[j]), score),
+                           bbox=dict(facecolor=color, alpha=0.5), fontsize=12, color='white')
+    plt.show()
+    name = np.mean(im)
+  
+    savefig ('vis/'+str(name)+'.png')
+    plt.clf()
+    plt.cla()
+
+    plt. close(0)
 def im_detect(predictor, data_batch, data_names, scales, cfg):
     output_all = predictor.predict(data_batch)
-    print output_all
 
     data_dict_all = [dict(zip(data_names, idata)) for idata in data_batch.data]
     scores_all = []
     pred_boxes_all = []
     for output, data_dict, scale in zip(output_all, data_dict_all, scales):
-
+     
+ 
         if cfg.TEST.HAS_RPN:
-            rois = output['rois_rois'].asnumpy()[:, 1:]
+            rois = output['rois_as_rois'].asnumpy()[:, 1:]
         else:
             rois = data_dict['rois'].asnumpy().reshape((-1, 5))[:, 1:]
         im_shape = data_dict['data'].shape
-
+        im = data_dict['data'].asnumpy()
         # save output
+
         scores = output['cls_prob_reshape_output'].asnumpy()[0]
         bbox_deltas = output['bbox_pred_reshape_output'].asnumpy()[0]
 
+        label = np.argmax(scores,axis =1).astype('int')
+
+        s = np.max(scores,axis=1)
+
         # post processing
         pred_boxes = bbox_pred(rois, bbox_deltas)
+ 
         pred_boxes = clip_boxes(pred_boxes, im_shape[-2:])
-
         # we used scaled image & roi to train, so it is necessary to transform them back
-        pred_boxes = pred_boxes / scale
+        vis = False
 
+        if vis:
+
+         #   print rois,s
+            cls_dets = np.hstack((rois, s.reshape(len(s),1)))
+            s_list =[]
+            label_list =[]
+            rois_list =[]
+            for i in range(1,21):
+                ind = np.where(label==i)[0]
+                cls_dets_ = cls_dets[ind,:]
+                rois_=rois[ind,:]
+                label_ = label[ind]
+                s_ = s[ind]
+
+                nms = py_nms_wrapper(0.3)
+
+                keep = nms(cls_dets_)
+                rois_ =rois_[keep,:]
+                label_ = label_[keep]
+                s_ = s_[keep]
+                s_list.append(s_)
+                label_list.append(label_)
+                rois_list.append(rois_)
+            rois =  np.concatenate(rois_list)
+            s =  np.concatenate(s_list)
+            label =  np.concatenate(label_list)
+
+            vis_rois_detection(im,rois, label, s,1)
+
+        pred_boxes = pred_boxes / scale
         scores_all.append(scores)
         pred_boxes_all.append(pred_boxes)
     return scores_all, pred_boxes_all, data_dict_all
 
 
-def pred_eval(predictor, test_data, imdb, cfg, vis=False, thresh=1e-3, logger=None, ignore_cache=True):
+
+def pred_eval(predictor, test_data, imdb, cfg, vis=False, thresh=0.01, logger=None, ignore_cache=True):
     """
     wrapper for calculating offline validation for faster data analysis
     in this example, all threshold are set by hand
@@ -164,7 +247,7 @@ def pred_eval(predictor, test_data, imdb, cfg, vis=False, thresh=1e-3, logger=No
     :param thresh: valid detection threshold
     :return:
     """
-    print "$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$"
+
     det_file = os.path.join(imdb.result_path, imdb.name + '_detections.pkl')
     if os.path.exists(det_file) and not ignore_cache:
         with open(det_file, 'rb') as fid:
@@ -181,9 +264,8 @@ def pred_eval(predictor, test_data, imdb, cfg, vis=False, thresh=1e-3, logger=No
         test_data = PrefetchingIter(test_data)
 
     nms = py_nms_wrapper(cfg.TEST.NMS)
-
     # limit detections to max_per_image over all classes
-    max_per_image = 300
+    max_per_image = cfg.TEST.max_per_image
 
     num_images = imdb.num_images
     # all detections are collected into:
@@ -191,7 +273,6 @@ def pred_eval(predictor, test_data, imdb, cfg, vis=False, thresh=1e-3, logger=No
     #    (x1, y1, x2, y2, score)
     all_boxes = [[[] for _ in range(num_images)]
                  for _ in range(imdb.num_classes)]
-
     idx = 0
     data_time, net_time, post_time = 0.0, 0.0, 0.0
     t = time.time()
@@ -200,13 +281,15 @@ def pred_eval(predictor, test_data, imdb, cfg, vis=False, thresh=1e-3, logger=No
         t = time.time()
 
         scales = [iim_info[0, 2] for iim_info in im_info]
-      
         scores_all, boxes_all, data_dict_all = im_detect(predictor, data_batch, data_names, scales, cfg)
 
         t2 = time.time() - t
         t = time.time()
+ 
         for delta, (scores, boxes, data_dict) in enumerate(zip(scores_all, boxes_all, data_dict_all)):
+
             for j in range(1, imdb.num_classes):
+                
                 indexes = np.where(scores[:, j] > thresh)[0]
                 cls_scores = scores[indexes, j, np.newaxis]
                 cls_boxes = boxes[indexes, 4:8] if cfg.CLASS_AGNOSTIC else boxes[indexes, j * 4:(j + 1) * 4]
@@ -214,22 +297,19 @@ def pred_eval(predictor, test_data, imdb, cfg, vis=False, thresh=1e-3, logger=No
                 keep = nms(cls_dets)
                 all_boxes[j][idx+delta] = cls_dets[keep, :]
 
-
             if max_per_image > 0:
                 image_scores = np.hstack([all_boxes[j][idx+delta][:, -1]
                                           for j in range(1, imdb.num_classes)])
-                max_per_image=0
                 if len(image_scores) > max_per_image:
                     image_thresh = np.sort(image_scores)[-max_per_image]
-                    image_thresh = 0.5
                     for j in range(1, imdb.num_classes):
                         keep = np.where(all_boxes[j][idx+delta][:, -1] >= image_thresh)[0]
                         all_boxes[j][idx+delta] = all_boxes[j][idx+delta][keep, :]
-                    print len(all_boxes)
-
+            vis =False
+            
             if vis:
                 boxes_this_image = [[]] + [all_boxes[j][idx+delta] for j in range(1, imdb.num_classes)]
-                vis_all_detection(data_dict['data'].asnumpy(), boxes_this_image, imdb.classes, scales[delta], cfg)
+                vis_all_detection(idx,data_dict['data'].asnumpy(), boxes_this_image, imdb.classes, scales[delta], cfg)
 
         idx += test_data.batch_size
         t3 = time.time() - t
@@ -243,14 +323,13 @@ def pred_eval(predictor, test_data, imdb, cfg, vis=False, thresh=1e-3, logger=No
 
     with open(det_file, 'wb') as f:
         cPickle.dump(all_boxes, f, protocol=cPickle.HIGHEST_PROTOCOL)
-   
 
     info_str = imdb.evaluate_detections(all_boxes)
     if logger:
         logger.info('evaluate detections: \n{}'.format(info_str))
 
 
-def vis_all_detection(im_array, detections, class_names, scale, cfg, threshold=1e-3):
+def vis_all_detection(idx,im_array, detections, class_names, scale, cfg, threshold=0.1):
     """
     visualize all detections in one image
     :param im_array: [b=1 c h w] in rgb
@@ -259,8 +338,12 @@ def vis_all_detection(im_array, detections, class_names, scale, cfg, threshold=1
     :param scale: visualize the scaled image
     :return:
     """
+    import matplotlib  
+    matplotlib.use('Agg') 
     import matplotlib.pyplot as plt
+    from matplotlib.pyplot import savefig  
     import random
+    print cfg.network.PIXEL_MEANS
     im = image.transform_inverse(im_array, cfg.network.PIXEL_MEANS)
     plt.imshow(im)
     for j, name in enumerate(class_names):
@@ -282,6 +365,13 @@ def vis_all_detection(im_array, detections, class_names, scale, cfg, threshold=1
                            '{:s} {:.3f}'.format(name, score),
                            bbox=dict(facecolor=color, alpha=0.5), fontsize=12, color='white')
     plt.show()
+    savefig ('vis/'+str(idx)+'.png')
+    plt.clf()
+    plt.cla()
+    plt. close(0)
+
+
+
 
 
 def draw_all_detection(im_array, detections, class_names, scale, cfg, threshold=1e-1):

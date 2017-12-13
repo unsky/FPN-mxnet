@@ -36,19 +36,23 @@ def test_rcnn(cfg, dataset, image_set, root_path, dataset_path,
         sym = sym_instance.get_symbol(cfg, is_train=False)
         imdb = eval(dataset)(image_set, root_path, dataset_path, result_path=output_path)
         roidb = imdb.gt_roidb()
+
     else:
         sym_instance = eval(cfg.symbol + '.' + cfg.symbol)()
         sym = sym_instance.get_symbol_rcnn(cfg, is_train=False)
         imdb = eval(dataset)(image_set, root_path, dataset_path, result_path=output_path)
         gt_roidb = imdb.gt_roidb()
         roidb = eval('imdb.' + proposal + '_roidb')(gt_roidb)
-#    print len(roidb)
+
     # get test data iter
+  
     test_data = TestLoader(roidb, cfg, batch_size=len(ctx), shuffle=shuffle, has_rpn=has_rpn)
+
+
 
     # load model
     arg_params, aux_params = load_param(prefix, epoch, process=True)
-    print test_data.provide_data_single
+  
     # infer shape
     data_shape_dict = dict(test_data.provide_data_single)
     sym_instance.infer_shape(data_shape_dict)

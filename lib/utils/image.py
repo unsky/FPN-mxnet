@@ -34,7 +34,6 @@ def get_image(roidb, config):
         im_tensor = transform(im, config.network.PIXEL_MEANS)
         processed_ims.append(im_tensor)
         im_info = [im_tensor.shape[2], im_tensor.shape[3], im_scale]
-        
         new_rec['boxes'] = clip_boxes(np.round(roi_rec['boxes'].copy() * im_scale), im_info[:2])
         new_rec['im_info'] = im_info
         processed_roidb.append(new_rec)

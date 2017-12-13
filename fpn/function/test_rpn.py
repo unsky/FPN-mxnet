@@ -36,7 +36,7 @@ def test_rpn(cfg, dataset, image_set, root_path, dataset_path,
 
     # load symbol
     sym_instance = eval(cfg.symbol + '.' + cfg.symbol)()
-    sym = sym_instance.get_symbol_rpn(cfg, is_train=False)
+    sym = sym_instance.get_symbol(cfg, is_train=False)
 
     # load dataset and prepare imdb for training
     imdb = eval(dataset)(image_set, root_path, dataset_path, result_path=output_path)

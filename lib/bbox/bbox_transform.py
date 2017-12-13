@@ -65,6 +65,8 @@ def nonlinear_transform(ex_rois, gt_rois):
     :param gt_rois: [N, 4]
     :return: [N, 4]
     """
+
+
     assert ex_rois.shape[0] == gt_rois.shape[0], 'inconsistent rois number'
 
     ex_widths = ex_rois[:, 2] - ex_rois[:, 0] + 1.0
@@ -115,6 +117,7 @@ def nonlinear_pred(boxes, box_deltas):
     pred_h = np.exp(dh) * heights[:, np.newaxis]
 
     pred_boxes = np.zeros(box_deltas.shape)
+    
     # x1
     pred_boxes[:, 0::4] = pred_ctr_x - 0.5 * (pred_w - 1.0)
     # y1
@@ -123,6 +126,8 @@ def nonlinear_pred(boxes, box_deltas):
     pred_boxes[:, 2::4] = pred_ctr_x + 0.5 * (pred_w - 1.0)
     # y2
     pred_boxes[:, 3::4] = pred_ctr_y + 0.5 * (pred_h - 1.0)
+
+    
 
     return pred_boxes
 

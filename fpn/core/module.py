@@ -273,6 +273,7 @@ class Module(BaseModule):
 
         attrs = self._symbol.attr_dict()
         for name, arr in self._arg_params.items():
+          
             desc = InitDesc(name, attrs.get(name, None))
             _impl(desc, arr, arg_params)
 
@@ -778,7 +779,7 @@ class MutableModule(BaseModule):
         return self._curr_module.get_params()
 
     def init_params(self, initializer=Uniform(0.01), arg_params=None, aux_params=None,
-                    allow_missing=False, force_init=False):
+                    allow_missing=True, force_init=False):
         if self.params_initialized and not force_init:
             return
         assert self.binded, 'call bind before initializing the parameters'
@@ -875,7 +876,7 @@ class MutableModule(BaseModule):
             optimizer='sgd', optimizer_params=(('learning_rate', 0.01),),
             eval_end_callback=None,
             eval_batch_end_callback=None, initializer=Uniform(0.01),
-            arg_params=None, aux_params=None, allow_missing=False,
+            arg_params=None, aux_params=None, allow_missing=True,
             force_rebind=False, force_init=False, begin_epoch=0, num_epoch=None,
             validation_metric=None, monitor=None, prefix=None):
         """Train the module parameters.

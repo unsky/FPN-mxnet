@@ -46,6 +46,7 @@ class Symbol:
         for k in self.sym.list_arguments():
             if k in data_shape_dict or (False if is_train else 'label' in k):
                 continue
+          
             assert k in arg_params, k + ' not initialized'
             assert arg_params[k].shape == self.arg_shape_dict[k], \
                 'shape inconsistent for ' + k + ' inferred ' + str(self.arg_shape_dict[k]) + ' provided ' + str(

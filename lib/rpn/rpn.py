@@ -25,15 +25,16 @@ def get_rpn_testbatch(roidb, cfg):
     :return: data, label, im_info
     """
     # assert len(roidb) == 1, 'Single batch only'
-    print roidb
-    imgs, roidb = get_image(roidb, cfg)
 
+  
+    imgs, roidb = get_image(roidb, cfg)
     im_array = imgs
     im_info = [np.array([roidb[i]['im_info']], dtype=np.float32) for i in range(len(roidb))]
 
     data = [{'data': im_array[i],
             'im_info': im_info[i]} for i in range(len(roidb))]
     label = {}
+  
 
     return data, label, im_info
 
@@ -65,12 +66,13 @@ def get_rpn_batch(roidb, cfg):
     return data, label
 
 
-def assign_anchor(feat_shape_p3,feat_shape_p4,feat_shape_p5,feat_shape_p6,
+def assign_anchor(feat_shape_p2,feat_shape_p3,feat_shape_p4,feat_shape_p5,feat_shape_p6,
                   gt_boxes, im_info, cfg,
-                  feat_stride_p3=4,scales_p3=(8,), ratios_p3=(0.75, 1, 1.5),
-                  feat_stride_p4=8,scales_p4=(8,), ratios_p4=(0.75, 1, 1.5),
-                  feat_stride_p5=16,scales_p5=(8,), ratios_p5=(0.75, 1, 1.5),
-                  feat_stride_p6=16,scales_p6=(8,), ratios_p6=(0.75, 1, 1.5),
+                  feat_stride_p2=4,scales_p2=(16,), ratios_p2=(0.75, 1, 1.5),
+                  feat_stride_p3=8,scales_p3=(16,), ratios_p3=(0.75, 1, 1.5),
+                  feat_stride_p4=16,scales_p4=(16,), ratios_p4=(0.75, 1, 1.5),
+                  feat_stride_p5=32,scales_p5=(16,), ratios_p5=(0.75, 1, 1.5),
+                  feat_stride_p6=64,scales_p6=(16,), ratios_p6=(0.75, 1, 1.5),
                   allowed_border=1000):
     
     """
@@ -89,9 +91,9 @@ def assign_anchor(feat_shape_p3,feat_shape_p4,feat_shape_p5,feat_shape_p6,
     'bbox_outside_weight': used to normalize the bbox_loss, all weights sums to RPN_POSITIVE_WEIGHT
     """
     allowed_border=1000
-    feat_shape = [feat_shape_p3,feat_shape_p4,feat_shape_p5,feat_shape_p6]
-    feat_stride=[4,8,16,32]
-    scales=(8,10,12)
+    feat_shape = [feat_shape_p2,feat_shape_p3,feat_shape_p4,feat_shape_p5,feat_shape_p6]
+    feat_stride=[4,8,16,32,64]
+    scales=scales_p3
     ratios=(0.5, 1, 2)
     
 
@@ -227,6 +229,7 @@ def assign_anchor(feat_shape_p3,feat_shape_p4,feat_shape_p5,feat_shape_p6,
 
     bbox_targets = np.zeros((total_anchors, 4), dtype=np.float32)
     if gt_boxes.size > 0:
+  
         bbox_targets[:] = bbox_transform(all_anchors, gt_boxes[argmax_overlaps, :4])
 
     bbox_weights = np.zeros((total_anchors, 4), dtype=np.float32)
@@ -243,6 +246,7 @@ def assign_anchor(feat_shape_p3,feat_shape_p4,feat_shape_p5,feat_shape_p6,
     #print 'choose labels spends :{:.4f}s'.format(time.time()-t_1_1)
     #print 'sort labels spends :{:.4f}s'.format(time.time()-t_1)
     # map up to original set of anchors
+ #   print '---------++++++++++++++++++++++++++++++++-----------------',len(labels[labels!=-1]),len(labels[labels==1])
     t_2 = time.time()
     labels_list = []
     bbox_targets_list = []
@@ -311,8 +315,8 @@ def assign_anchor(feat_shape_p3,feat_shape_p4,feat_shape_p5,feat_shape_p6,
                     'bbox_target/p3': bbox_targets1, 'bbox_target/p4': bbox_targets2, 'bbox_target/p5': bbox_targets3, 'bbox_target/p6': bbox_targets4,
                     'bbox_weight/p3': bbox_weights1, 'bbox_weight/p4': bbox_weights2, 'bbox_weight/p5': bbox_weights3, 'bbox_weight/p6': bbox_weights4}
     elif len(feat_shape) == 5:
-        label = {'label1': labels1, 'label2': labels2, 'label3': labels3, 'label4': labels4, 'label5': labels5,
-            'bbox_target1': bbox_targets1, 'bbox_target2': bbox_targets2, 'bbox_target3': bbox_targets3, 'bbox_target4': bbox_targets4, 'bbox_target5': bbox_targets5,
-            'bbox_weight1': bbox_weights1, 'bbox_weight2': bbox_weights2, 'bbox_weight3': bbox_weights3, 'bbox_weight4': bbox_weights4, 'bbox_weight5':bbox_weights5}
+        label = {'label/p2': labels1, 'label/p3': labels2, 'label/p4': labels3, 'label/p5': labels4, 'label/p6': labels5,
+            'bbox_target/p2': bbox_targets1, 'bbox_target/p3': bbox_targets2, 'bbox_target/p4': bbox_targets3, 'bbox_target/p5': bbox_targets4, 'bbox_target/p6': bbox_targets5,
+            'bbox_weight/p2': bbox_weights1, 'bbox_weight/p3': bbox_weights2, 'bbox_weight/p4': bbox_weights3, 'bbox_weight/p5': bbox_weights4, 'bbox_weight/p6':bbox_weights5}
     #print 'get labels spends :{:.4f}s'.format(time.time()-t_2)
     return label

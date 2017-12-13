@@ -23,6 +23,7 @@ def parse_args():
 
     args, rest = parser.parse_known_args()
     # update config
+   
     update_config(args.cfg)
 
     # training
@@ -58,7 +59,8 @@ def train_net(args, ctx, pretrained, epoch, prefix, begin_epoch, end_epoch, lr, 
     sym_instance = eval(config.symbol + '.' + config.symbol)()
     sym = sym_instance.get_symbol(config, is_train=True)
 
-    feat_sym_p3 = sym.get_internals()['fpn_cls_score3_output']    
+    feat_sym_p2 = sym.get_internals()['fpn_cls_score2_output']    
+    feat_sym_p3 = sym.get_internals()['fpn_cls_score3_output']
     feat_sym_p4 = sym.get_internals()['fpn_cls_score4_output']
     feat_sym_p5 = sym.get_internals()['fpn_cls_score5_output']
     feat_sym_p6 = sym.get_internals()['fpn_cls_score6_output']
@@ -84,11 +86,15 @@ def train_net(args, ctx, pretrained, epoch, prefix, begin_epoch, end_epoch, lr, 
  
 
     # load training data
-    train_data = AnchorLoader(feat_sym_p3,
+    train_data = AnchorLoader(feat_sym_p2,
+                              feat_sym_p3,
                               feat_sym_p4,
                               feat_sym_p5,
                               feat_sym_p6,
                               roidb, config, batch_size=input_batch_size, shuffle=config.TRAIN.SHUFFLE, ctx=ctx,
+                              feat_stride_p2=config.network.p2_RPN_FEAT_STRIDE,
+                              anchor_scales_p2=config.network.p2_ANCHOR_SCALES,
+                              anchor_ratios_p2=config.network.p2_ANCHOR_RATIOS,
                               feat_stride_p3=config.network.p3_RPN_FEAT_STRIDE,
                               anchor_scales_p3=config.network.p3_ANCHOR_SCALES,
                               anchor_ratios_p3=config.network.p3_ANCHOR_RATIOS, 
@@ -111,6 +117,7 @@ def train_net(args, ctx, pretrained, epoch, prefix, begin_epoch, end_epoch, lr, 
     print train_data.provide_data_single
     print train_data.provide_label_single
     data_shape_dict = dict(train_data.provide_data_single + train_data.provide_label_single)
+    
     pprint.pprint(data_shape_dict)
     sym_instance.infer_shape(data_shape_dict)
 
@@ -143,14 +150,9 @@ def train_net(args, ctx, pretrained, epoch, prefix, begin_epoch, end_epoch, lr, 
     rpn_cls_metric = metric.RPNLogLossMetric()
     rpn_bbox_metric = metric.RPNL1LossMetric()
 
-
-
-
     eval_metric = metric.RCNNAccMetric(config)
     cls_metric = metric.RCNNLogLossMetric(config)
     bbox_metric = metric.RCNNL1LossMetric(config)
-
-
 
     eval_metrics = mx.metric.CompositeEvalMetric()
     # rpn_eval_metric, rpn_cls_metric, rpn_bbox_metric, eval_metric, cls_metric, bbox_metric
@@ -174,22 +176,23 @@ def train_net(args, ctx, pretrained, epoch, prefix, begin_epoch, end_epoch, lr, 
     print('lr', lr, 'lr_epoch_diff', lr_epoch_diff, 'lr_iters', lr_iters)
     lr_scheduler = WarmupMultiFactorScheduler(lr_iters, lr_factor, config.TRAIN.warmup, config.TRAIN.warmup_lr, config.TRAIN.warmup_step)
     # optimizer
-    optimizer_params = {'momentum': config.TRAIN.momentum,
-                        'wd': config.TRAIN.wd,
+    optimizer_params = {'momentum': 0.9,
+                        'wd': 0.0005,
                         'learning_rate': lr,
                         'lr_scheduler': lr_scheduler,
-                        'rescale_grad': 1.0,
-                        'clip_gradient': None}
+                        'rescale_grad':  (1.0 / batch_size),
+                        'clip_gradient': 5}
 
     if not isinstance(train_data, PrefetchingIter):
         train_data = PrefetchingIter(train_data)
     # train
+ #   initializer = mx.init.Xavier(rnd_type = 'gaussian',factor_type='in',magnitude=2)
+  #  adam =mx.optimizer.create('adam',learning_rate =lr)
     print "#########################################train#######################################"
     mod.fit(train_data, eval_metric=eval_metrics, epoch_end_callback=epoch_end_callback,
             batch_end_callback=batch_end_callback, kvstore=config.default.kvstore,
-            optimizer='sgd', optimizer_params=optimizer_params,
+            optimizer='sgd', optimizer_params=optimizer_params, 
             arg_params=arg_params, aux_params=aux_params, begin_epoch=begin_epoch, num_epoch=end_epoch)
-
 
 def main():
     print('Called with argument:', args)
